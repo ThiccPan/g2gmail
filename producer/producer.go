@@ -4,9 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+
+	"github.com/thiccpan/g2gmail/model"
+	"github.com/thiccpan/g2gmail/mq"
 )
 
 func failOnError(err error, msg string) {
@@ -24,24 +29,16 @@ func main() {
 	failOnError(err, "Failed to open a channel")
 	defer ch.Close()
 
-	q, err := ch.QueueDeclare(
-		"hello", // name
-		false,   // durable
-		false,   // delete when unused
-		false,   // exclusive
-		false,   // no-wait
-		nil,     // arguments
-	)
+	q, err := mq.InitQueueDeclare(ch)
 	failOnError(err, "Failed to declare a queue")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	body := struct {
-		Value string
-	}{
-		"data 1",
+	body := model.Task{
+		Value: bodyFrom(os.Args),
 	}
+
 	data, _ := json.Marshal(body)
 	err = ch.PublishWithContext(ctx,
 		"",     // exchange
@@ -52,6 +49,18 @@ func main() {
 			ContentType: "text/json",
 			Body:        data,
 		})
+
 	failOnError(err, "Failed to publish a message")
 	log.Printf(" [x] Sent %s\n", body)
+}
+
+func bodyFrom(args []string) string {
+	var s string
+	log.Println(args[1:])
+	if (len(args) < 2) || os.Args[1] == "" {
+		s = "hello"
+	} else {
+		s = strings.Join(args[1:], " ")
+	}
+	return s
 }
